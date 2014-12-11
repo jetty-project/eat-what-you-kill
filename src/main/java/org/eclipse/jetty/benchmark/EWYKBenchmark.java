@@ -89,7 +89,7 @@ public class EWYKBenchmark
     }
 
     @Benchmark
-    @BenchmarkMode({Mode.Throughput, Mode.AverageTime})
+    @BenchmarkMode({Mode.Throughput})
     public long testIterative(ThreadState state) 
     {
         state.connection.schedule();
@@ -99,7 +99,7 @@ public class EWYKBenchmark
     }
 
     @Benchmark
-    @BenchmarkMode({Mode.Throughput, Mode.AverageTime})
+    @BenchmarkMode({Mode.Throughput})
     public long testEatWhatYouKill(ThreadState state) 
     {
         state.connection.schedule();
@@ -107,15 +107,27 @@ public class EWYKBenchmark
         strategy.run();
         return state.connection.getResult();
     }
+
+    @Benchmark
+    @BenchmarkMode({Mode.Throughput})
+    public long testEatWhatYouKillSM(ThreadState state) 
+    {
+        state.connection.schedule();
+        ExecutionStrategy strategy = new ExecutionStrategy.EatWhatYouKillSM(state.connection,server);
+        strategy.run();
+        return state.connection.getResult();
+    }
     
-    public static void main(String[] args) throws RunnerException {
+    public static void main(String[] args) throws RunnerException 
+    {
         Options opt = new OptionsBuilder()
                 .include(EWYKBenchmark.class.getSimpleName())
-                .warmupIterations(4)
-                .measurementIterations(8)
+                .warmupIterations(2)
+                .measurementIterations(4)
                 .forks(1)
                 .threads(2000)
                 .syncIterations(true)
+                .warmupTime(new TimeValue(8,TimeUnit.SECONDS))
                 .measurementTime(new TimeValue(8,TimeUnit.SECONDS))
                 .build();
 

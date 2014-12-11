@@ -20,6 +20,7 @@
 package org.eclipse.jetty.benchmark;
 
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -94,7 +95,7 @@ public abstract class ExecutionStrategy implements Runnable
      */
     public static class EatWhatYouKill extends ExecutionStrategy
     {
-        private final AtomicReference<Boolean> _producing = new AtomicReference<Boolean>(Boolean.FALSE);
+        private final AtomicBoolean _producing = new AtomicBoolean(Boolean.FALSE);
         private volatile boolean _threadPending;
 
         public EatWhatYouKill(Producer producer, Executor executor)
@@ -113,36 +114,135 @@ public abstract class ExecutionStrategy implements Runnable
                     break;
 
                 // If we got here, then we are the thread that is producing
-                Runnable task=null;
-                try
-                {
-                    task=_producer.produce();
-
-                    if (task==null)
-                    {
-                        _producer.onAllScheduled();
-                        break;
-                    }    
-
-                    // since we are going to "eat"==run the task we 
-                    // just "killed"==produced, 
-                    // then we may need another thread to keep producing
-                    if (!_threadPending)
-                    {
-                        // Dispatch a thread to continue producing
-                        _threadPending=true;
-                        _executor.execute(this);
-                    }
-                }
-                finally
+                Runnable task=_producer.produce();
+                if (task==null)
                 {
                     _producing.set(false);
+                    _producer.onAllScheduled();
+                    return;
+                }
+                
+                boolean execute=false;
+                if (!_threadPending)
+                {
+                    execute=true;
+                    _threadPending=true;
                 }
 
-                // run the task
+                _producing.set(false);
+                
+                if (execute)
+                    _executor.execute(this);
+
                 task.run();
             }
         }
     }
+    
+    /* ------------------------------------------------------------ */
+    /** 
+     * A Strategy that allows threads to run the tasks that they have produced,
+     * so execution is done with a hot cache (ie threads eat what they kill).
+     */
+    public static class EatWhatYouKillSM extends ExecutionStrategy
+    {
+        private enum State {IDLE,PRODUCING,PENDING,REPRODUCING};
+        private final AtomicReference<State> _state = new AtomicReference<>(State.IDLE);
 
+        public EatWhatYouKillSM(Producer producer, Executor executor)
+        {
+            super(producer,executor);
+        }
+        
+        public void run()
+        {      
+            // New Thread arriving to the strategy.
+            loop:while(true)
+            {
+                State state=_state.get();
+                switch(state)
+                {
+                    case IDLE:
+                    case PENDING:
+                        if (!_state.compareAndSet(state,State.PRODUCING))
+                            continue;
+                        break loop;
+                        
+                    case REPRODUCING:
+                        if (!_state.compareAndSet(state,State.PRODUCING))
+                            continue;
+                        return;  // Another thread is already producing
+                        
+                    case PRODUCING:
+                        return; // Another thread is already producing
+                }
+            }
+            
+            while (true)
+            {                
+                // If we got here, then we are the thread that is producing
+                Runnable task=_producer.produce();
+
+                if (task==null)
+                {
+                    loop:while(true)
+                    {
+                        State state=_state.get();
+                        switch(state)
+                        {
+                            case PRODUCING:
+                                if (!_state.compareAndSet(state,State.IDLE))
+                                    continue;
+                                break loop;
+                            case REPRODUCING:
+                                if (!_state.compareAndSet(state,State.IDLE))
+                                    continue;
+                                _state.set(State.PENDING);
+                                break loop;
+                            default:
+                                throw new IllegalStateException();
+                        }
+                    }
+                    _producer.onAllScheduled();
+                    return;
+                }
+
+                loop:while(true)
+                {
+                    State state=_state.get();
+                    switch(state)
+                    {
+                        case PRODUCING:
+                            if (!_state.compareAndSet(state,State.PENDING))
+                                continue;
+                            _executor.execute(this);
+                            break loop;
+                        case REPRODUCING:
+                            if (!_state.compareAndSet(state,State.PENDING))
+                                continue;
+                            break loop;
+                        default:
+                            throw new IllegalStateException();
+                    }
+                }
+                
+                task.run();
+
+                loop:while(true)
+                {
+                    State state=_state.get();
+                    switch(state)
+                    {
+                        case PENDING:
+                            if (!_state.compareAndSet(state,State.REPRODUCING))
+                                continue;
+                            break loop;
+
+                        default:
+                            return; 
+                    }
+                }
+            }
+        }
+    }
 }

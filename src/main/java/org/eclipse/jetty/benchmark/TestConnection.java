@@ -232,11 +232,30 @@ public class TestConnection implements Producer
         
         server.stop();
     }
+
+    public static void eatwhatyoukillSM() throws Exception
+    {
+        TestServer server = new TestServer();
+        server.start();
+        TestConnection connection = new TestConnection(server);
+        ExecutionStrategy strategy = new ExecutionStrategy.EatWhatYouKillSM(connection,server);
+        
+        connection.schedule();
+        strategy.run();
+        System.err.println(connection.getResponses()+"/"+connection.getResult());
+        
+        connection.schedule();
+        strategy.run();
+        System.err.println(connection.getResponses()+"/"+connection.getResult());
+        
+        server.stop();
+    }
     
     public static void main(String... args) throws Exception
     {
         direct();
         iterative();
         eatwhatyoukill();
+        eatwhatyoukillSM();
     }
 }
