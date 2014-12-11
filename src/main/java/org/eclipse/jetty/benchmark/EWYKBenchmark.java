@@ -89,7 +89,7 @@ public class EWYKBenchmark
     }
 
     @Benchmark
-    @BenchmarkMode({Mode.Throughput, Mode.AverageTime})
+    @BenchmarkMode({Mode.Throughput})
     public long testIterative(ThreadState state) 
     {
         state.connection.schedule();
@@ -99,7 +99,7 @@ public class EWYKBenchmark
     }
 
     @Benchmark
-    @BenchmarkMode({Mode.Throughput, Mode.AverageTime})
+    @BenchmarkMode({Mode.Throughput})
     public long testEatWhatYouKill(ThreadState state) 
     {
         state.connection.schedule();
@@ -114,7 +114,7 @@ public class EWYKBenchmark
                 .warmupIterations(4)
                 .measurementIterations(4)
                 .forks(1)
-                .threads(2000)
+                .threads(20)
                 .syncIterations(true)
                 .measurementTime(new TimeValue(8,TimeUnit.SECONDS))
                 .build();

@@ -96,7 +96,6 @@ public abstract class ExecutionStrategy implements Runnable
     {
         private final AtomicReference<Boolean> _producing = new AtomicReference<Boolean>(Boolean.FALSE);
         private volatile boolean _threadPending;
-        private volatile int _max;
 
         public EatWhatYouKill(Producer producer, Executor executor)
         {
