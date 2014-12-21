@@ -42,6 +42,8 @@ import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
+import org.openjdk.jmh.profile.LinuxPerfAsmProfiler;
+import org.openjdk.jmh.profile.Profiler;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
@@ -90,48 +92,52 @@ public class EWYKBenchmark
 
     @Benchmark
     @BenchmarkMode({Mode.Throughput})
-    public long testIterative(ThreadState state) 
+    public long testPR(ThreadState state) 
     {
         state.connection.schedule();
-        ExecutionStrategy strategy = new ExecutionStrategy.Iterative(state.connection,server);
-        strategy.run();
+        ExecutionStrategy strategy = new ExecutionStrategy.ProduceRun(state.connection);
+        strategy.execute();
         return state.connection.getResult();
     }
 
     @Benchmark
     @BenchmarkMode({Mode.Throughput})
-    public long testEatWhatYouKill(ThreadState state) 
+    public long testPER(ThreadState state) 
     {
         state.connection.schedule();
-        ExecutionStrategy strategy = new ExecutionStrategy.EatWhatYouKill(state.connection,server);
-        strategy.run();
+        ExecutionStrategy strategy = new ExecutionStrategy.ProduceExecuteRun(state.connection,server);
+        strategy.execute();
         return state.connection.getResult();
     }
 
     @Benchmark
     @BenchmarkMode({Mode.Throughput})
-    public long testEatWhatYouKillSM(ThreadState state) 
+    public long testEPR(ThreadState state) 
     {
         state.connection.schedule();
-        ExecutionStrategy strategy = new ExecutionStrategy.EatWhatYouKillSM(state.connection,server);
-        strategy.run();
+        ExecutionStrategy strategy = new ExecutionStrategy.ExecuteProduceRun(state.connection,server);
+        strategy.execute();
         return state.connection.getResult();
     }
+
     
     public static void main(String[] args) throws RunnerException 
     {
         Options opt = new OptionsBuilder()
                 .include(EWYKBenchmark.class.getSimpleName())
-                .warmupIterations(2)
-                .measurementIterations(4)
-                .forks(1)
+                .warmupIterations(4)
+                .measurementIterations(8)
+                .forks(0)
                 .threads(2000)
                 .syncIterations(true)
                 .warmupTime(new TimeValue(8,TimeUnit.SECONDS))
                 .measurementTime(new TimeValue(8,TimeUnit.SECONDS))
+                .addProfiler(LinuxPerfAsmProfiler.class)
                 .build();
 
+        
         new Runner(opt).run();
+        
     }
 }
 

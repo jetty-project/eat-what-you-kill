@@ -29,7 +29,7 @@ public class TestConnection implements Producer
     {
         _responses.clear();
         _requests.set(15+_server.getRandom(5));
-        _latch=new CountDownLatch(_requests.get()+1);
+        _latch=new CountDownLatch(_requests.get());
     }
     
     @Override
@@ -52,12 +52,6 @@ public class TestConnection implements Producer
         request.put("uri",uri+".txt"); // one of 100 resources on server
         request.put("delay",Integer.toString(uri%4==0?_server.getRandom(100):0)); // random processing delay 0-100ms on 25% of requests
         return new Handler(request,response);
-    }
-
-    @Override
-    public void onAllScheduled()
-    {
-        _latch.countDown();
     }
 
     private class Handler implements Runnable
@@ -162,7 +156,6 @@ public class TestConnection implements Producer
         try
         {
             _latch.await();
-            
         }
         catch (InterruptedException e)
         {
@@ -183,7 +176,6 @@ public class TestConnection implements Producer
             task.run();
             task = connection.produce();
         }
-        connection.onAllScheduled();
         System.err.println(connection.getResponses()+"/"+connection.getResult());
         
         connection.schedule();
@@ -193,7 +185,6 @@ public class TestConnection implements Producer
             task.run();
             task = connection.produce();
         }
-        connection.onAllScheduled();
         System.err.println(connection.getResponses()+"/"+connection.getResult());
     }
 
@@ -202,14 +193,14 @@ public class TestConnection implements Producer
         TestServer server = new TestServer();
         server.start();
         TestConnection connection = new TestConnection(server);
-        ExecutionStrategy strategy = new ExecutionStrategy.Iterative(connection,server);
+        ExecutionStrategy strategy = new ExecutionStrategy.ProduceExecuteRun(connection,server);
         
         connection.schedule();
-        strategy.run();
+        strategy.execute();
         System.err.println(connection.getResponses()+"/"+connection.getResult());
         
         connection.schedule();
-        strategy.run();
+        strategy.execute();
         System.err.println(connection.getResponses()+"/"+connection.getResult());
         
         server.stop();
@@ -220,42 +211,24 @@ public class TestConnection implements Producer
         TestServer server = new TestServer();
         server.start();
         TestConnection connection = new TestConnection(server);
-        ExecutionStrategy strategy = new ExecutionStrategy.EatWhatYouKill(connection,server);
+        ExecutionStrategy strategy = new ExecutionStrategy.ExecuteProduceRun(connection,server);
         
         connection.schedule();
-        strategy.run();
+        strategy.execute();
         System.err.println(connection.getResponses()+"/"+connection.getResult());
         
         connection.schedule();
-        strategy.run();
+        strategy.execute();
         System.err.println(connection.getResponses()+"/"+connection.getResult());
         
         server.stop();
     }
 
-    public static void eatwhatyoukillSM() throws Exception
-    {
-        TestServer server = new TestServer();
-        server.start();
-        TestConnection connection = new TestConnection(server);
-        ExecutionStrategy strategy = new ExecutionStrategy.EatWhatYouKillSM(connection,server);
-        
-        connection.schedule();
-        strategy.run();
-        System.err.println(connection.getResponses()+"/"+connection.getResult());
-        
-        connection.schedule();
-        strategy.run();
-        System.err.println(connection.getResponses()+"/"+connection.getResult());
-        
-        server.stop();
-    }
     
     public static void main(String... args) throws Exception
     {
         direct();
         iterative();
         eatwhatyoukill();
-        eatwhatyoukillSM();
     }
 }
