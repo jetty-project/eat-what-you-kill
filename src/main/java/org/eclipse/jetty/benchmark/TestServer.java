@@ -1,7 +1,6 @@
 package org.eclipse.jetty.benchmark;
 
 import java.io.File;
-import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
@@ -16,10 +15,9 @@ import java.util.concurrent.TimeUnit;
 public class TestServer implements Executor
 {
     private final ConcurrentMap<String,Map<String,String>> _sessions= new ConcurrentHashMap<>();
-    private final Random _random = new SecureRandom();
+    private final Random _random = new Random();
     private final ThreadPoolExecutor _threadpool = new ThreadPoolExecutor(256, 256, 60, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
     private final File _docroot;
-    private volatile boolean _running;
 
     TestServer(File docroot)
     {
@@ -59,12 +57,10 @@ public class TestServer implements Executor
 
     public void start() throws Exception
     {
-        _running=true;
     }
 
     public void stop() throws Exception
     {
-        _running=false;
         _threadpool.shutdown();
     }
     

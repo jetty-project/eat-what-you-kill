@@ -95,7 +95,7 @@ public class EWYKBenchmark
     }
 
     @Benchmark
-    @BenchmarkMode({Mode.Throughput})
+    @BenchmarkMode({Mode.Throughput,Mode.AverageTime})
     public long testPR(ThreadState state) 
     {
         state.connection.schedule();
@@ -105,7 +105,7 @@ public class EWYKBenchmark
     }
 
     @Benchmark
-    @BenchmarkMode({Mode.Throughput})
+    @BenchmarkMode({Mode.Throughput,Mode.AverageTime})
     public long testPER(ThreadState state) 
     {
         state.connection.schedule();
@@ -115,33 +115,27 @@ public class EWYKBenchmark
     }
 
     @Benchmark
-    @BenchmarkMode({Mode.Throughput})
+    @BenchmarkMode({Mode.Throughput,Mode.AverageTime})
     public long testEPR(ThreadState state) 
     {
         state.connection.schedule();
         ExecutionStrategy strategy = new ExecuteProduceRun(state.connection,server);
         strategy.dispatch();
         return state.connection.getResult();
-    }
+    }    
 
-    
-    public static void main(String[] args) throws RunnerException 
-    {
+    public static void main(String[] args) throws RunnerException {
         Options opt = new OptionsBuilder()
                 .include(EWYKBenchmark.class.getSimpleName())
-                .warmupIterations(2)
-                .measurementIterations(2)
+                .warmupIterations(4)
+                .measurementIterations(8)
                 .forks(1)
                 .threads(2000)
                 .syncIterations(true)
-                .warmupTime(new TimeValue(5,TimeUnit.SECONDS))
-                .measurementTime(new TimeValue(5,TimeUnit.SECONDS))
-                //.addProfiler(LinuxPerfAsmProfiler.class)
+                .measurementTime(new TimeValue(8,TimeUnit.SECONDS))
                 .build();
 
-        
         new Runner(opt).run();
-        
     }
 }
 
