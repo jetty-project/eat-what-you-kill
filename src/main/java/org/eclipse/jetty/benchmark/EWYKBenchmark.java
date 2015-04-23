@@ -34,6 +34,10 @@ package org.eclipse.jetty.benchmark;
 import java.io.File;
 import java.util.concurrent.TimeUnit;
 
+import org.eclipse.jetty.util.thread.ExecutionStrategy;
+import org.eclipse.jetty.util.thread.strategy.ExecuteProduceRun;
+import org.eclipse.jetty.util.thread.strategy.ProduceExecuteRun;
+import org.eclipse.jetty.util.thread.strategy.ProduceRun;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Level;
@@ -95,8 +99,8 @@ public class EWYKBenchmark
     public long testPR(ThreadState state) 
     {
         state.connection.schedule();
-        ExecutionStrategy strategy = new ExecutionStrategy.ProduceRun(state.connection);
-        strategy.execute();
+        ExecutionStrategy strategy = new ProduceRun(state.connection,server);
+        strategy.dispatch();
         return state.connection.getResult();
     }
 
@@ -105,8 +109,8 @@ public class EWYKBenchmark
     public long testPER(ThreadState state) 
     {
         state.connection.schedule();
-        ExecutionStrategy strategy = new ExecutionStrategy.ProduceExecuteRun(state.connection,server);
-        strategy.execute();
+        ExecutionStrategy strategy = new ProduceExecuteRun(state.connection,server);
+        strategy.dispatch();
         return state.connection.getResult();
     }
 
@@ -115,8 +119,8 @@ public class EWYKBenchmark
     public long testEPR(ThreadState state) 
     {
         state.connection.schedule();
-        ExecutionStrategy strategy = new ExecutionStrategy.ExecuteProduceRun(state.connection,server);
-        strategy.execute();
+        ExecutionStrategy strategy = new ExecuteProduceRun(state.connection,server);
+        strategy.dispatch();
         return state.connection.getResult();
     }
 
@@ -125,14 +129,14 @@ public class EWYKBenchmark
     {
         Options opt = new OptionsBuilder()
                 .include(EWYKBenchmark.class.getSimpleName())
-                .warmupIterations(4)
-                .measurementIterations(8)
-                .forks(0)
+                .warmupIterations(2)
+                .measurementIterations(2)
+                .forks(1)
                 .threads(2000)
                 .syncIterations(true)
-                .warmupTime(new TimeValue(8,TimeUnit.SECONDS))
-                .measurementTime(new TimeValue(8,TimeUnit.SECONDS))
-                .addProfiler(LinuxPerfAsmProfiler.class)
+                .warmupTime(new TimeValue(5,TimeUnit.SECONDS))
+                .measurementTime(new TimeValue(5,TimeUnit.SECONDS))
+                //.addProfiler(LinuxPerfAsmProfiler.class)
                 .build();
 
         

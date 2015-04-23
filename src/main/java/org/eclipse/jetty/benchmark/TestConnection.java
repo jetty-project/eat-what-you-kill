@@ -7,7 +7,10 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.eclipse.jetty.benchmark.ExecutionStrategy.Producer;
+import org.eclipse.jetty.util.thread.ExecutionStrategy;
+import org.eclipse.jetty.util.thread.ExecutionStrategy.Producer;
+import org.eclipse.jetty.util.thread.strategy.ExecuteProduceRun;
+import org.eclipse.jetty.util.thread.strategy.ProduceExecuteRun;
 
 
 
@@ -193,7 +196,7 @@ public class TestConnection implements Producer
         TestServer server = new TestServer();
         server.start();
         TestConnection connection = new TestConnection(server);
-        ExecutionStrategy strategy = new ExecutionStrategy.ProduceExecuteRun(connection,server);
+        ExecutionStrategy strategy = new ProduceExecuteRun(connection,server);
         
         connection.schedule();
         strategy.execute();
@@ -211,7 +214,7 @@ public class TestConnection implements Producer
         TestServer server = new TestServer();
         server.start();
         TestConnection connection = new TestConnection(server);
-        ExecutionStrategy strategy = new ExecutionStrategy.ExecuteProduceRun(connection,server);
+        ExecutionStrategy strategy = new ExecuteProduceRun(connection,server);
         
         connection.schedule();
         strategy.execute();
