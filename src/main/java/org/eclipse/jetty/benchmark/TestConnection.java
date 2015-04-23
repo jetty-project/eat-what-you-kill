@@ -7,11 +7,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.eclipse.jetty.util.thread.ExecutionStrategy;
 import org.eclipse.jetty.util.thread.ExecutionStrategy.Producer;
-import org.eclipse.jetty.util.thread.strategy.ExecuteProduceRun;
-import org.eclipse.jetty.util.thread.strategy.ProduceExecuteRun;
-
+import org.openjdk.jmh.infra.Blackhole;
 
 
 public class TestConnection implements Producer
@@ -44,7 +41,7 @@ public class TestConnection implements Producer
         // We have to simulate parsing a request
         // and creating a Runnable to handle that request.
         
-        // The SecureRandom will represent the IO subsystem from which requests will be read
+        // The Random will represent the IO subsystem from which requests will be read
         
         // The map will represent the request object
         Map<String,String> request = new HashMap<>();
@@ -53,7 +50,8 @@ public class TestConnection implements Producer
         
         int uri=_server.getRandom(100);
         request.put("uri",uri+".txt"); // one of 100 resources on server
-        request.put("delay",Integer.toString(uri%4==0?_server.getRandom(100):0)); // random processing delay 0-100ms on 25% of requests
+        request.put("delay",Integer.toString(uri%4==1?_server.getRandom(500):0)); // random processing delay 0-500ms on 25% of requests
+        Blackhole.consumeCPU(_server.getRandom(500)); // random CPU
         return new Handler(request,response);
     }
 
@@ -78,6 +76,7 @@ public class TestConnection implements Producer
             synchronized (session)
             {
                 userid = session.get("userid");
+                Blackhole.consumeCPU(100);
                 if (userid==null)
                 {
                     userid="USER-"+Math.abs(session.hashCode());
@@ -124,6 +123,8 @@ public class TestConnection implements Producer
                 //System.err.println(content);
                 _response.put("content",content);
             }
+
+            Blackhole.consumeCPU(1000);
             
             _responses.offer(_response);
             _latch.countDown();
@@ -167,71 +168,4 @@ public class TestConnection implements Producer
         return _responses.size();
     }
     
-    public static void direct()
-    {
-        TestServer server = new TestServer();
-        TestConnection connection = new TestConnection(server);
-
-        connection.schedule();
-        Runnable task=connection.produce();
-        while(task!=null)
-        {
-            task.run();
-            task = connection.produce();
-        }
-        System.err.println(connection.getResponses()+"/"+connection.getResult());
-        
-        connection.schedule();
-        task=connection.produce();
-        while(task!=null)
-        {
-            task.run();
-            task = connection.produce();
-        }
-        System.err.println(connection.getResponses()+"/"+connection.getResult());
-    }
-
-    public static void iterative() throws Exception
-    {
-        TestServer server = new TestServer();
-        server.start();
-        TestConnection connection = new TestConnection(server);
-        ExecutionStrategy strategy = new ProduceExecuteRun(connection,server);
-        
-        connection.schedule();
-        strategy.execute();
-        System.err.println(connection.getResponses()+"/"+connection.getResult());
-        
-        connection.schedule();
-        strategy.execute();
-        System.err.println(connection.getResponses()+"/"+connection.getResult());
-        
-        server.stop();
-    }
-
-    public static void eatwhatyoukill() throws Exception
-    {
-        TestServer server = new TestServer();
-        server.start();
-        TestConnection connection = new TestConnection(server);
-        ExecutionStrategy strategy = new ExecuteProduceRun(connection,server);
-        
-        connection.schedule();
-        strategy.execute();
-        System.err.println(connection.getResponses()+"/"+connection.getResult());
-        
-        connection.schedule();
-        strategy.execute();
-        System.err.println(connection.getResponses()+"/"+connection.getResult());
-        
-        server.stop();
-    }
-
-    
-    public static void main(String... args) throws Exception
-    {
-        direct();
-        iterative();
-        eatwhatyoukill();
-    }
 }

@@ -34,10 +34,11 @@ package org.eclipse.jetty.benchmark;
 import java.io.File;
 import java.util.concurrent.TimeUnit;
 
+import org.eclipse.jetty.toolchain.test.BenchmarkHelper;
 import org.eclipse.jetty.util.thread.ExecutionStrategy;
-import org.eclipse.jetty.util.thread.strategy.ExecuteProduceRun;
-import org.eclipse.jetty.util.thread.strategy.ProduceExecuteRun;
-import org.eclipse.jetty.util.thread.strategy.ProduceRun;
+import org.eclipse.jetty.util.thread.strategy.ExecuteProduceConsume;
+import org.eclipse.jetty.util.thread.strategy.ProduceExecuteConsume;
+import org.eclipse.jetty.util.thread.strategy.ProduceConsume;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Level;
@@ -46,8 +47,6 @@ import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
-import org.openjdk.jmh.profile.LinuxPerfAsmProfiler;
-import org.openjdk.jmh.profile.Profiler;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
@@ -59,10 +58,13 @@ public class EWYKBenchmark
 {
     static volatile TestServer server;
     static volatile File directory;
+    static volatile BenchmarkHelper benchmark;
     
     @Setup(Level.Trial)
     public static void setupServer() throws Exception
     {
+        benchmark = new BenchmarkHelper();
+        
         // Make a test directory
         directory = File.createTempFile("ewyk","dir");
         if (directory.exists())
@@ -81,12 +83,26 @@ public class EWYKBenchmark
         server=new TestServer(directory);
         server.start();
     }
-
+    
     @TearDown(Level.Trial)
     public static void stopServer() throws Exception
     {
         server.stop();
     }
+    
+
+    @Setup(Level.Iteration)
+    public static void startIteration() throws Exception
+    {
+        benchmark.startStatistics();
+    }
+    
+    @TearDown(Level.Iteration)
+    public static void stopIteration() throws Exception
+    {
+        benchmark.stopStatistics();
+    }
+    
     
     @State(Scope.Thread)
     public static class ThreadState
@@ -99,8 +115,8 @@ public class EWYKBenchmark
     public long testPR(ThreadState state) 
     {
         state.connection.schedule();
-        ExecutionStrategy strategy = new ProduceRun(state.connection,server);
-        strategy.dispatch();
+        ExecutionStrategy strategy = new ProduceConsume(state.connection,server);
+        strategy.execute();
         return state.connection.getResult();
     }
 
@@ -109,8 +125,8 @@ public class EWYKBenchmark
     public long testPER(ThreadState state) 
     {
         state.connection.schedule();
-        ExecutionStrategy strategy = new ProduceExecuteRun(state.connection,server);
-        strategy.dispatch();
+        ExecutionStrategy strategy = new ProduceExecuteConsume(state.connection,server);
+        strategy.execute();
         return state.connection.getResult();
     }
 
@@ -119,20 +135,21 @@ public class EWYKBenchmark
     public long testEPR(ThreadState state) 
     {
         state.connection.schedule();
-        ExecutionStrategy strategy = new ExecuteProduceRun(state.connection,server);
-        strategy.dispatch();
+        ExecutionStrategy strategy = new ExecuteProduceConsume(state.connection,server);
+        strategy.execute();
         return state.connection.getResult();
-    }    
+    }  
 
     public static void main(String[] args) throws RunnerException {
         Options opt = new OptionsBuilder()
                 .include(EWYKBenchmark.class.getSimpleName())
                 .warmupIterations(4)
-                .measurementIterations(8)
+                .measurementIterations(2)
                 .forks(1)
                 .threads(2000)
                 .syncIterations(true)
-                .measurementTime(new TimeValue(8,TimeUnit.SECONDS))
+                .warmupTime(new TimeValue(10,TimeUnit.SECONDS))
+                .measurementTime(new TimeValue(10,TimeUnit.SECONDS))
                 .build();
 
         new Runner(opt).run();

@@ -20,21 +20,18 @@ package org.eclipse.jetty.util.thread.strategy;
 
 import java.util.concurrent.Executor;
 
-import org.eclipse.jetty.util.log.Log;
-import org.eclipse.jetty.util.log.Logger;
 import org.eclipse.jetty.util.thread.ExecutionStrategy;
 
 /**
  * <p>A strategy where the caller thread iterates over task production, submitting each
  * task to an {@link Executor} for execution.</p>
  */
-public class ProduceExecuteRun implements ExecutionStrategy
+public class ProduceConsume implements ExecutionStrategy, Runnable
 {
-    private static final Logger LOG = Log.getLogger(ExecutionStrategy.class);
     private final Producer _producer;
     private final Executor _executor;
 
-    public ProduceExecuteRun(Producer producer, Executor executor)
+    public ProduceConsume(Producer producer, Executor executor)
     {
         this._producer = producer;
         this._executor = executor;
@@ -48,19 +45,23 @@ public class ProduceExecuteRun implements ExecutionStrategy
         {
             // Produce a task.
             Runnable task = _producer.produce();
-            if (LOG.isDebugEnabled())
-                LOG.debug("{} PER produced {}",_producer,task);
 
             if (task == null)
                 break;
 
-            // Execute the task.
-            _executor.execute(task);
+            // run the task.
+            task.run();
         }
     }
 
     @Override
     public void dispatch()
+    {
+        _executor.execute(this);
+    }
+
+    @Override
+    public void run()
     {
         execute();
     }
