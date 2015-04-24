@@ -50,7 +50,7 @@ public class TestConnection implements Producer
         
         int uri=_server.getRandom(100);
         request.put("uri",uri+".txt"); // one of 100 resources on server
-        request.put("delay",Integer.toString(uri%4==1?_server.getRandom(500):0)); // random processing delay 0-500ms on 25% of requests
+        request.put("delay",Integer.toString(uri%4==1?_server.getRandom(100):0)); // random processing delay 0-100ms on 25% of requests
         Blackhole.consumeCPU(_server.getRandom(500)); // random CPU
         return new Handler(request,response);
     }

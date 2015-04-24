@@ -111,7 +111,7 @@ public class EWYKBenchmark
     }
 
     @Benchmark
-    @BenchmarkMode({Mode.Throughput,Mode.AverageTime})
+    @BenchmarkMode({Mode.Throughput})
     public long testPR(ThreadState state) 
     {
         state.connection.schedule();
@@ -121,7 +121,7 @@ public class EWYKBenchmark
     }
 
     @Benchmark
-    @BenchmarkMode({Mode.Throughput,Mode.AverageTime})
+    @BenchmarkMode({Mode.Throughput})
     public long testPER(ThreadState state) 
     {
         state.connection.schedule();
@@ -131,7 +131,7 @@ public class EWYKBenchmark
     }
 
     @Benchmark
-    @BenchmarkMode({Mode.Throughput,Mode.AverageTime})
+    @BenchmarkMode({Mode.Throughput})
     public long testEPR(ThreadState state) 
     {
         state.connection.schedule();
