@@ -36,6 +36,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.eclipse.jetty.toolchain.test.BenchmarkHelper;
 import org.eclipse.jetty.util.thread.ExecutionStrategy;
+import org.eclipse.jetty.util.thread.strategy.EatWhatYouKill;
 import org.eclipse.jetty.util.thread.strategy.ExecuteProduceConsume;
 import org.eclipse.jetty.util.thread.strategy.ProduceExecuteConsume;
 import org.eclipse.jetty.util.thread.strategy.ProduceConsume;
@@ -136,6 +137,16 @@ public class EWYKBenchmark
     {
         state.connection.schedule();
         ExecutionStrategy strategy = new ExecuteProduceConsume(state.connection,server);
+        strategy.execute();
+        return state.connection.getResult();
+    }  
+
+    @Benchmark
+    @BenchmarkMode({Mode.Throughput})
+    public long testEWYK(ThreadState state) 
+    {
+        state.connection.schedule();
+        ExecutionStrategy strategy = new EatWhatYouKill(state.connection,server);
         strategy.execute();
         return state.connection.getResult();
     }  
