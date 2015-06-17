@@ -19,14 +19,11 @@
 package org.eclipse.jetty.util.thread.strategy;
 
 import java.util.concurrent.Executor;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.eclipse.jetty.util.log.Log;
 import org.eclipse.jetty.util.log.Logger;
 import org.eclipse.jetty.util.thread.ExecutionStrategy;
-import org.eclipse.jetty.util.thread.SpinLock;
-import org.eclipse.jetty.util.thread.SpinLock.Lock;
+import org.eclipse.jetty.util.thread.Locker;
 
 /**
  * <p>A strategy where the thread calls produce will always run the resulting task
@@ -46,7 +43,7 @@ import org.eclipse.jetty.util.thread.SpinLock.Lock;
 public class ExecuteProduceConsume implements ExecutionStrategy, Runnable
 {
     private static final Logger LOG = Log.getLogger(ExecuteProduceConsume.class);
-    private final SpinLock _lock = new SpinLock();
+    private final Locker _lock = new Locker();
     private final Runnable _runExecute = new RunExecute();
     private final Producer _producer;
     private final Executor _executor;
@@ -67,7 +64,7 @@ public class ExecuteProduceConsume implements ExecutionStrategy, Runnable
         if (LOG.isDebugEnabled())
             LOG.debug("{} execute",this);
         boolean produce=false;
-        try (Lock locked = _lock.lock())
+        try (Locker.Lock locked = _lock.lock())
         {
             // If we are idle and a thread is not producing
             if (_idle)
@@ -98,7 +95,7 @@ public class ExecuteProduceConsume implements ExecutionStrategy, Runnable
         if (LOG.isDebugEnabled())
             LOG.debug("{} spawning",this);
         boolean dispatch=false;
-        try (Lock locked = _lock.lock())
+        try (Locker.Lock locked = _lock.lock())
         {
             if (_idle)
                 dispatch=true;
@@ -115,7 +112,7 @@ public class ExecuteProduceConsume implements ExecutionStrategy, Runnable
         if (LOG.isDebugEnabled())
             LOG.debug("{} run",this);
         boolean produce=false;
-        try (Lock locked = _lock.lock())
+        try (Locker.Lock locked = _lock.lock())
         {
             _pending=false;
             if (!_idle && !_producing)
@@ -145,7 +142,7 @@ public class ExecuteProduceConsume implements ExecutionStrategy, Runnable
                 LOG.debug("{} produced {}",this,task);
             
             boolean dispatch=false;
-            try (Lock locked = _lock.lock())
+            try (Locker.Lock locked = _lock.lock())
             {
                 // Finished producing
                 _producing=false;
@@ -195,7 +192,7 @@ public class ExecuteProduceConsume implements ExecutionStrategy, Runnable
                 LOG.debug("{} ran {}",this,task);
             
             // Once we have run the task, we can try producing again.
-            try (Lock locked = _lock.lock())
+            try (Locker.Lock locked = _lock.lock())
             {
                 // Is another thread already producing or we are now idle?
                 if (_producing || _idle)
@@ -210,7 +207,7 @@ public class ExecuteProduceConsume implements ExecutionStrategy, Runnable
 
     public Boolean isIdle()
     {
-        try (Lock locked = _lock.lock())
+        try (Locker.Lock locked = _lock.lock())
         {
             return _idle;
         }
@@ -220,7 +217,7 @@ public class ExecuteProduceConsume implements ExecutionStrategy, Runnable
     {
         StringBuilder builder = new StringBuilder();
         builder.append("EPR ");
-        try (Lock locked = _lock.lock())
+        try (Locker.Lock locked = _lock.lock())
         {
             builder.append(_idle?"Idle/":"");
             builder.append(_producing?"Prod/":"");

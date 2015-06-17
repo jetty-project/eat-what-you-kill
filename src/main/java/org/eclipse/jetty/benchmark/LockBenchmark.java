@@ -33,9 +33,12 @@ package org.eclipse.jetty.benchmark;
 
 import java.io.File;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.eclipse.jetty.toolchain.test.BenchmarkHelper;
 import org.eclipse.jetty.util.thread.ExecutionStrategy;
+import org.eclipse.jetty.util.thread.Locker;
 import org.eclipse.jetty.util.thread.strategy.ExecuteProduceConsume;
 import org.eclipse.jetty.util.thread.strategy.ProduceExecuteConsume;
 import org.eclipse.jetty.util.thread.strategy.ProduceConsume;
@@ -54,99 +57,92 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 import org.openjdk.jmh.runner.options.TimeValue;
 
 @State(Scope.Benchmark)
-public class EWYKBenchmark 
+public class LockBenchmark 
 {
-    static volatile TestServer server;
-    static volatile File directory;
-    static volatile BenchmarkHelper benchmark;
     
     @Setup(Level.Trial)
-    public static void setupServer() throws Exception
+    public static void setupTrial() throws Exception
     {
-        benchmark = new BenchmarkHelper();
-        
-        // Make a test directory
-        directory = File.createTempFile("ewyk","dir");
-        if (directory.exists())
-            directory.delete();
-        directory.mkdir();
-        directory.deleteOnExit();
-        
-        // Make some test files
-        for (int i=0;i<75;i++)
-        {
-            File file =new File(directory,i+".txt");
-            file.createNewFile();
-            file.deleteOnExit();
-        }
-        
-        server=new TestServer(directory);
-        server.start();
     }
     
     @TearDown(Level.Trial)
-    public static void stopServer() throws Exception
+    public static void teardownTrial() throws Exception
     {
-        server.stop();
     }
     
 
     @Setup(Level.Iteration)
-    public static void startIteration() throws Exception
+    public static void setupIteration() throws Exception
     {
-        benchmark.startStatistics();
     }
     
     @TearDown(Level.Iteration)
-    public static void stopIteration() throws Exception
+    public static void teardownIteration() throws Exception
     {
-        benchmark.stopStatistics();
     }
     
     
     @State(Scope.Thread)
     public static class ThreadState
     {
-        volatile TestConnection connection=new TestConnection(server);
+        long count;
+        Locker lock = new Locker(false);
+        Locker spin = new Locker(true);
     }
 
     @Benchmark
     @BenchmarkMode({Mode.Throughput})
-    public long testPR(ThreadState state) 
+    public long testSync(ThreadState state) 
     {
-        state.connection.schedule();
-        ExecutionStrategy strategy = new ProduceConsume(state.connection,server);
-        strategy.execute();
-        return state.connection.getResult();
+        long c=0;
+        boolean even;
+        synchronized (state)
+        {
+            c=state.count;
+            even=state.count%2==0;
+            state.count=++state.count%10000;
+        }
+        return even?c:-c;
+    }
+    
+    @Benchmark
+    @BenchmarkMode({Mode.Throughput})
+    public long testLock(ThreadState state) 
+    {
+        long c=0;
+        boolean even;
+        try (Locker.Lock l = state.lock.lock())
+        {
+            c=state.count;
+            even=state.count%2==0;
+            state.count=++state.count%10000;
+        }
+        return even?c:-c;
     }
 
     @Benchmark
     @BenchmarkMode({Mode.Throughput})
-    public long testPER(ThreadState state) 
+    public long testSpinLock(ThreadState state) 
     {
-        state.connection.schedule();
-        ExecutionStrategy strategy = new ProduceExecuteConsume(state.connection,server);
-        strategy.execute();
-        return state.connection.getResult();
+        long c=0;
+        boolean even;
+        try (Locker.Lock l = state.spin.lock())
+        {
+            c=state.count;
+            even=state.count%2==0;
+            state.count=++state.count%10000;
+        }
+        return even?c:-c;
     }
 
-    @Benchmark
-    @BenchmarkMode({Mode.Throughput})
-    public long testEPR(ThreadState state) 
-    {
-        state.connection.schedule();
-        ExecutionStrategy strategy = new ExecuteProduceConsume(state.connection,server);
-        strategy.execute();
-        return state.connection.getResult();
-    }  
 
     public static void main(String[] args) throws RunnerException {
         Options opt = new OptionsBuilder()
-                .include(EWYKBenchmark.class.getSimpleName())
+                .include(LockBenchmark.class.getSimpleName())
                 .warmupIterations(4)
                 .measurementIterations(2)
                 .forks(1)
-                .threads(2000)
+                .threads(1)
                 .syncIterations(true)
                 .warmupTime(new TimeValue(10,TimeUnit.SECONDS))
                 .measurementTime(new TimeValue(10,TimeUnit.SECONDS))
