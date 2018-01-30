@@ -3,20 +3,18 @@ package org.eclipse.jetty.benchmark;
 import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ThreadLocalRandom;
+
+import org.eclipse.jetty.util.thread.QueuedThreadPool;
 
 
 public class TestServer implements Executor
 {
     private final ConcurrentMap<String,Map<String,String>> _sessions= new ConcurrentHashMap<>();
-    private final Random _random = new Random();
-    private final ThreadPoolExecutor _threadpool = new ThreadPoolExecutor(256, 256, 60, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
+    private final QueuedThreadPool _threadpool = new QueuedThreadPool(200);
     private final File _docroot;
 
     TestServer(File docroot)
@@ -46,7 +44,7 @@ public class TestServer implements Executor
     
     public int getRandom(int max)
     {
-        return _random.nextInt(max);
+        return ThreadLocalRandom.current().nextInt(max);
     }
 
     @Override
@@ -57,11 +55,12 @@ public class TestServer implements Executor
 
     public void start() throws Exception
     {
+        _threadpool.start();
     }
 
     public void stop() throws Exception
     {
-        _threadpool.shutdown();
+        _threadpool.stop();
     }
     
     public File getFile(String path)

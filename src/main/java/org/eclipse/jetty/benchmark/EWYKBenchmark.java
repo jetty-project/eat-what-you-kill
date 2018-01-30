@@ -32,22 +32,28 @@
 package org.eclipse.jetty.benchmark;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 import org.eclipse.jetty.toolchain.test.BenchmarkHelper;
+import org.eclipse.jetty.util.component.LifeCycle;
 import org.eclipse.jetty.util.thread.ExecutionStrategy;
+import org.eclipse.jetty.util.thread.ReservedThreadExecutor;
 import org.eclipse.jetty.util.thread.strategy.EatWhatYouKill;
-import org.eclipse.jetty.util.thread.strategy.ExecuteProduceConsume;
 import org.eclipse.jetty.util.thread.strategy.ProduceExecuteConsume;
 import org.eclipse.jetty.util.thread.strategy.ProduceConsume;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Mode;
+import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
+import org.openjdk.jmh.profile.CompilerProfiler;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
@@ -57,10 +63,17 @@ import org.openjdk.jmh.runner.options.TimeValue;
 @State(Scope.Benchmark)
 public class EWYKBenchmark 
 {
-    static volatile TestServer server;
-    static volatile File directory;
-    static volatile BenchmarkHelper benchmark;
+    static TestServer server;
+    static ReservedThreadExecutor reserved;
+    static File directory;
+    static BenchmarkHelper benchmark;
+
+    @Param({"PC","PEC","EWYK"})
+    public static String strategyName;
     
+    @Param({"true","false"})
+    public static boolean sleeping;
+       
     @Setup(Level.Trial)
     public static void setupServer() throws Exception
     {
@@ -83,86 +96,94 @@ public class EWYKBenchmark
         
         server=new TestServer(directory);
         server.start();
+        reserved = new ReservedThreadExecutor(server,20);
+        reserved.start();
     }
     
     @TearDown(Level.Trial)
     public static void stopServer() throws Exception
     {
+        reserved.stop();
         server.stop();
     }
-    
-
-    @Setup(Level.Iteration)
-    public static void startIteration() throws Exception
-    {
-        benchmark.startStatistics();
-    }
-    
-    @TearDown(Level.Iteration)
-    public static void stopIteration() throws Exception
-    {
-        benchmark.stopStatistics();
-    }
-    
     
     @State(Scope.Thread)
     public static class ThreadState
     {
-        volatile TestConnection connection=new TestConnection(server);
+        final TestConnection connection=new TestConnection(server,sleeping);
+        final ExecutionStrategy strategy;
+        {
+            switch(strategyName)
+            {
+                case "PC":
+                    strategy = new ProduceConsume(connection,server);
+                    break;
+                    
+                case "PEC":
+                    strategy = new ProduceExecuteConsume(connection,server);
+                    break;
+                    
+                case "EWYK":
+                    strategy = new EatWhatYouKill(connection,server,reserved);
+                    break;
+
+                default:
+                    throw new IllegalStateException();
+            }
+            
+            LifeCycle.start(strategy);
+        }
     }
 
     @Benchmark
     @BenchmarkMode({Mode.Throughput})
-    public long testPR(ThreadState state) 
+    public long testStrategy(ThreadState state) throws Exception
     {
-        state.connection.schedule();
-        ExecutionStrategy strategy = new ProduceConsume(state.connection,server);
-        strategy.execute();
-        return state.connection.getResult();
+        int r;
+        switch(server.getRandom(8))
+        {
+            case 0:
+                r = 4;
+                break;
+            case 1:
+            case 2:
+                r = 2;
+                break;
+            default:
+                r = 1;
+                break;
+        }
+
+        List<CompletableFuture<String>> results = new ArrayList<>(r);
+        for (int i=0;i<r;i++)
+        {
+            CompletableFuture<String> result = new CompletableFuture<String>();
+            results.add(result);
+            state.connection.submit(result);
+        }
+                
+        state.strategy.produce();
+        
+        long hash = 0;
+        for (CompletableFuture<String> result : results)
+            hash ^= result.get().hashCode();
+        
+        return hash;
     }
-
-    @Benchmark
-    @BenchmarkMode({Mode.Throughput})
-    public long testPER(ThreadState state) 
-    {
-        state.connection.schedule();
-        ExecutionStrategy strategy = new ProduceExecuteConsume(state.connection,server);
-        strategy.execute();
-        return state.connection.getResult();
-    }
-
-    @Benchmark
-    @BenchmarkMode({Mode.Throughput})
-    public long testEPR(ThreadState state) 
-    {
-        state.connection.schedule();
-        ExecutionStrategy strategy = new ExecuteProduceConsume(state.connection,server);
-        strategy.execute();
-        return state.connection.getResult();
-    }  
-
-    @Benchmark
-    @BenchmarkMode({Mode.Throughput})
-    public long testEWYK(ThreadState state) 
-    {
-        state.connection.schedule();
-        ExecutionStrategy strategy = new EatWhatYouKill(state.connection,server);
-        strategy.execute();
-        return state.connection.getResult();
-    }  
 
     public static void main(String[] args) throws RunnerException {
         Options opt = new OptionsBuilder()
                 .include(EWYKBenchmark.class.getSimpleName())
-                .warmupIterations(4)
-                .measurementIterations(2)
+                .warmupIterations(3)
+                .measurementIterations(3)
                 .forks(1)
-                .threads(2000)
-                .syncIterations(true)
-                .warmupTime(new TimeValue(10,TimeUnit.SECONDS))
-                .measurementTime(new TimeValue(10,TimeUnit.SECONDS))
+                .threads(40)
+                // .syncIterations(true) // Don't start all threads at same time
+                .warmupTime(new TimeValue(5000,TimeUnit.MILLISECONDS))
+                .measurementTime(new TimeValue(5000,TimeUnit.MILLISECONDS))
+                // .addProfiler(CompilerProfiler.class)
                 .build();
-
+        
         new Runner(opt).run();
     }
 }
